@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Audio → Bacterial Growth Simulator</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f0f1a;
+      color: white;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #1c1c2e;
+      padding: 30px;
+      border-radius: 12px;
+    }
+
+    input {
+      margin: 20px 0;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      background: #4c6ef5;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #364fc7;
+    }
+
+    .result {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+
+    .box {
+      margin-top: 10px;
+      padding: 10px;
+      background: #2b2b40;
+      border-radius: 8px;
+    }
+
+    canvas {
+      margin-top: 20px;
+      background: #111122;
+      border-radius: 10px;
+      padding: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <h1>🎵 Audio → Bacterial Growth Simulator</h1>
+
+  <input type="file" id="fileInput" accept=".mp3,.wav" />
+  <br>
+
+  <button onclick="uploadFile()">Analyze</button>
+
+  <div class="result" id="result"></div>
+
+  <canvas id="growthChart"></canvas>
+</div>
+
+<script>
+
+let chartInstance = null;
+
+async function uploadFile() {
+  const fileInput = document.getElementById("fileInput");
+  const resultDiv = document.getElementById("result");
+
+  if (!fileInput.files.length) {
+    alert("Please upload an audio file");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+
+  resultDiv.innerHTML = `
+    <div class="box">🧬 Analyzing audio signal...</div>
+    <div class="box">Simulating bacterial response...</div>
+  `;
+
+  try {
+    const response = await fetch("/analyze", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      resultDiv.innerHTML = `
+        <div class="box" style="color:red;">
+          ❌ ${data.error}
+        </div>
+      `;
+      return;
+    }
+
+    resultDiv.innerHTML = `
+      <div class="box">🎶 Tempo: ${data.tempo} BPM</div>
+      <div class="box">📡 Frequency: ${data.frequency} Hz</div>
+    `;
+
+    const ctx = document.getElementById("growthChart").getContext("2d");
+
+    // destroy old chart if it exists (IMPORTANT FIX)
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
+
+    if (data.growth_curve) {
+      chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: data.growth_curve.map((_, i) => i),
+          datasets: [{
+            label: "Bacterial Growth Simulation",
+            data: data.growth_curve,
+            borderColor: "lime",
+            fill: false,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              title: { display: true, text: "Time" }
+            },
+            y: {
+              title: { display: true, text: "Population" }
+            }
+          }
+        }
+      });
+    }
+
+  } catch (err) {
+    console.error(err);
+
+    resultDiv.innerHTML = `
+      <div class="box" style="color:red;">
+        ❌ Error analyzing audio. Please try again.
+      </div>
+    `;
+  }
+}
+
+</script>
+
+</body>
+</html>
