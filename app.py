@@ -10,9 +10,6 @@ app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# -------------------------
-# FRONTEND (PETRI DISH UI)
-# -------------------------
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -69,6 +66,13 @@ button {
   <div id="info" class="box"></div>
 
   <canvas id="petri" width="600" height="600"></canvas>
+
+  <div id="timers" class="box">
+    ⏱ Real World Elapsed Time: 0.0 seconds<br>
+    🧫 Simulated Time: 0.0 seconds
+  </div>
+
+  <div id="completeMsg" class="box"></div>
 </div>
 
 <script>
@@ -77,18 +81,23 @@ const ctx = canvas.getContext("2d");
 
 let colonies = [];
 let animationRunning = false;
-let growthRate = 0;
+
+let startTime = null;
+let spawnAccumulator = 0;
+
+const REAL_DURATION = 10.0;
+const SIM_SCALE = 120; // 10 sec → 1200 sec
 
 function initColonies() {
   colonies = [];
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 20; i++) {   // starts with visible bacteria
     const angle = Math.random() * Math.PI * 2;
     const radius = Math.random() * 200;
 
     colonies.push({
       x: 300 + Math.cos(angle) * radius,
       y: 300 + Math.sin(angle) * radius,
-      r: 2
+      r: 3
     });
   }
 }
@@ -96,14 +105,12 @@ function initColonies() {
 function drawPetriDish() {
   ctx.clearRect(0, 0, 600, 600);
 
-  // dish border glow
   ctx.beginPath();
   ctx.arc(300, 300, 290, 0, Math.PI * 2);
   ctx.strokeStyle = "#2dd4bf";
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // colonies
   for (let c of colonies) {
     ctx.beginPath();
     ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
@@ -115,23 +122,58 @@ function drawPetriDish() {
 function animate() {
   if (!animationRunning) return;
 
-  for (let c of colonies) {
-    c.r += growthRate;
-    if (c.r > 60) c.r = 60; // cap growth
+  const now = performance.now();
+  const realElapsed = (now - startTime) / 1000;
+
+  const timers = document.getElementById("timers");
+  const msg = document.getElementById("completeMsg");
+
+  // clamp at 10 seconds
+  const clampedReal = Math.min(realElapsed, REAL_DURATION);
+  const simTime = clampedReal * SIM_SCALE; // 0 → 1200
+
+  timers.innerHTML = `
+    ⏱ Real World Elapsed Time: ${clampedReal.toFixed(1)} seconds<br>
+    🧫 Simulated Time: ${simTime.toFixed(1)} seconds
+  `;
+
+  // spawn bacteria over time (only during active phase)
+  spawnAccumulator += 0.016;
+  if (spawnAccumulator > 0.2) {
+    spawnAccumulator = 0;
+
+    colonies.push({
+      x: 300 + Math.cos(Math.random() * Math.PI * 2) * Math.random() * 220,
+      y: 300 + Math.sin(Math.random() * Math.PI * 2) * Math.random() * 220,
+      r: 3
+    });
   }
 
   drawPetriDish();
+
+  // STOP CONDITION
+  if (realElapsed >= REAL_DURATION) {
+    animationRunning = false;
+
+    msg.innerHTML = "Incubation complete! 🧫✨";
+
+    return;
+  }
+
   requestAnimationFrame(animate);
 }
 
 async function uploadFile() {
   const fileInput = document.getElementById("fileInput");
   const info = document.getElementById("info");
+  const msg = document.getElementById("completeMsg");
 
   if (!fileInput.files.length) {
     alert("Upload audio file");
     return;
   }
+
+  msg.innerHTML = "";
 
   const formData = new FormData();
   formData.append("file", fileInput.files[0]);
@@ -150,12 +192,10 @@ async function uploadFile() {
     📡 Frequency: ${data.frequency} Hz
   `;
 
-  // convert biological growth curve into animation speed
-  const avgGrowth = data.growth_curve.reduce((a,b)=>a+b,0) / data.growth_curve.length;
-  growthRate = avgGrowth / 200;
+  startTime = performance.now();
+  spawnAccumulator = 0;
 
   initColonies();
-
   animationRunning = true;
   animate();
 }
@@ -169,16 +209,11 @@ drawPetriDish();
 </html>
 """
 
-# -------------------------
-# HOME ROUTE
-# -------------------------
 @app.route("/")
 def home():
     return INDEX_HTML
 
-# -------------------------
-# AUDIO ANALYSIS
-# -------------------------
+
 def analyze_audio(file_path):
     audio, sr = librosa.load(file_path, sr=22050, mono=True)
 
@@ -192,9 +227,7 @@ def analyze_audio(file_path):
 
     return tempo, float(dominant_freq)
 
-# -------------------------
-# GROWTH MODEL
-# -------------------------
+
 def compute_growth_curve(tempo, frequency):
     frequency = max(frequency, 1e-3)
 
@@ -213,9 +246,7 @@ def compute_growth_curve(tempo, frequency):
 
     return curve
 
-# -------------------------
-# API
-# -------------------------
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     file = request.files["file"]
@@ -237,8 +268,6 @@ def analyze():
     finally:
         os.remove(path)
 
-# -------------------------
-# RUN
-# -------------------------
+
 if __name__ == "__main__":
     app.run(debug=True)
