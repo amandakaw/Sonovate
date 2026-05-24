@@ -123,10 +123,11 @@ body::before {
   letter-spacing: 0.04em;
   color: #7dd3fc;
   opacity: 0.92;
+  display: inline-block;
 }
 
 .slogan::before {
-  content: "—";
+  content: "";
   margin-right: 12px;
   opacity: 0.5;
   font-style: normal;
@@ -361,8 +362,8 @@ canvas {
 <body>
 
 <header class="site-header">
-  <span class="brand">Sonovate</span>
-  <span class="slogan">THE INTERSECTION OF SCIENCE AND MUSIC</span>
+  <div class="brand">Sonovate</div>
+  <div class="slogan">THE INTERSECTION OF SCIENCE AND MUSIC</div>
 </header>
 
 <div class="container">
