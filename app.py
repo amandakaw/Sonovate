@@ -86,11 +86,13 @@ let startTime = null;
 let spawnAccumulator = 0;
 
 const REAL_DURATION = 10.0;
-const SIM_SCALE = 120; // 10 sec → 1200 sec
+const SIM_SCALE = 120;
+
+let effectiveGrowthRate = 0.02;
 
 function initColonies() {
   colonies = [];
-  for (let i = 0; i < 20; i++) {   // starts with visible bacteria
+  for (let i = 0; i < 20; i++) {
     const angle = Math.random() * Math.PI * 2;
     const radius = Math.random() * 200;
 
@@ -128,16 +130,14 @@ function animate() {
   const timers = document.getElementById("timers");
   const msg = document.getElementById("completeMsg");
 
-  // clamp at 10 seconds
   const clampedReal = Math.min(realElapsed, REAL_DURATION);
-  const simTime = clampedReal * SIM_SCALE; // 0 → 1200
+  const simTime = clampedReal * SIM_SCALE;
 
   timers.innerHTML = `
     ⏱ Real World Elapsed Time: ${clampedReal.toFixed(1)} seconds<br>
     🧫 Simulated Time: ${simTime.toFixed(1)} seconds
   `;
 
-  // spawn bacteria over time (only during active phase)
   spawnAccumulator += 0.016;
   if (spawnAccumulator > 0.2) {
     spawnAccumulator = 0;
@@ -151,11 +151,16 @@ function animate() {
 
   drawPetriDish();
 
-  // STOP CONDITION
   if (realElapsed >= REAL_DURATION) {
     animationRunning = false;
 
-    msg.innerHTML = "Incubation complete! 🧫✨";
+    const baseline = 0.02;
+    const percentChange = (effectiveGrowthRate / baseline) * 100;
+
+    msg.innerHTML = `
+      🧫 Incubation Complete<br>
+      📈 Growth Rate Change: ${percentChange.toFixed(2)}%
+    `;
 
     return;
   }
@@ -187,6 +192,8 @@ async function uploadFile() {
 
   const data = await res.json();
 
+  effectiveGrowthRate = data.r;
+
   info.innerHTML = `
     🎶 Tempo: ${data.tempo} BPM <br>
     📡 Frequency: ${data.frequency} Hz
@@ -200,7 +207,6 @@ async function uploadFile() {
   animate();
 }
 
-// initial render
 initColonies();
 drawPetriDish();
 </script>
@@ -244,7 +250,7 @@ def compute_growth_curve(tempo, frequency):
         N = N + r * N * (1 - N / 100)
         curve.append(N)
 
-    return curve
+    return curve, r
 
 
 @app.route("/analyze", methods=["POST"])
@@ -257,12 +263,13 @@ def analyze():
 
     try:
         tempo, freq = analyze_audio(path)
-        curve = compute_growth_curve(tempo, freq)
+        curve, r = compute_growth_curve(tempo, freq)
 
         return jsonify({
             "tempo": round(tempo, 2),
             "frequency": round(freq, 2),
-            "growth_curve": curve
+            "growth_curve": curve,
+            "r": r
         })
 
     finally:
